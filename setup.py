@@ -24,15 +24,15 @@ setup(name='fluidcondor',
       license="Unlicense",
       keywords='cluster htcondor',
       packages=['fluidcondor'],
-      package_dir={'fluidcondor': ''},
+      package_dir={'fluidcondor': '.'},
       #py_modules=['fluidcondor.condor_descript',
       #            'fluidcondor.submitsplit',
       #            'fluidcondor.condor_checklogs'],
       install_requires=find_packages(),
       entry_points = {
-          'console_scripts': ['condor_checklogs=fluidcondor.condor_checklogs:main',
-                              'condor_descript=fluidcondor.condor_descript:main',
-                              'submitsplit=fluidcondor.submitsplit:main']
+          'console_scripts': ['condor_checklogs=condor_checklogs:main',
+                              'condor_descript=condor_descript:main',
+                              'submitsplit=submitsplit:main']
           },
       include_package_data=True,
       zip_safe=False)
