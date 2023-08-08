@@ -16,7 +16,7 @@ I thought this would be useful for some users of
 run a job. In addition this will help automate the creation of description file
 for condor submission, for example with pipeline managers like snakemake.
 
-# submitplit
+# submitsplit
 
 Split too large submission files.
 

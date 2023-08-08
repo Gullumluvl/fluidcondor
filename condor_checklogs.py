@@ -23,15 +23,16 @@ GREEN = COLOR_SEQ % 32
 OK = GREEN + 'OK' + RESET
 NO = RED + 'NO' + RESET
 
+TIME_FORMAT1 = '%Y-%m-%d %H:%M:%S'
 TIME_FORMAT = '%m/%d %H:%M:%S'
 
 RE_RETURN = re.compile(r'\(([^()]+) (\d+)\)')
-RE_DATE = re.compile(r'0\d\d \([0-9.]+\) (\d+/\d+ \d+:\d+:\d+) ')
+RE_DATE = re.compile(r'0\d\d \([0-9.]+\) ((?:\d{4}-\d{2}-\d{2}|\d+/\d+) \d+:\d+:\d+) ')
 #RE_SUBMITTED = re.compile(r'000 ')
 #RE_STARTED = re.compile(r'001 ')
 #RE_TERM = re.compile(r'005 ')
-RE_MEM = re.compile(r'^\s*Memory \(MB\)\s+:\s*(\d+)\s+(\d+)\s+(\d+)$')
-RE_MEMUPDATE = re.compile(r'^\s*(\d+)\s+-\s+MemoryUsage of job \(([A-Za-z]+)\)$')
+RE_MEM = re.compile(r'^\s*Memory \(MB\)\s+:\s*(\d+)\s+(\d+)\s+(\d+)\s*$')
+RE_MEMUPDATE = re.compile(r'^\s*(\d+)\s+-\s+MemoryUsage of job \(([A-Za-z]+)\)\s*$')
 
 STATES = {'000 ': 'submitted',
           '001 ': 'started',
@@ -75,19 +76,23 @@ def termination_code(logfile):
                         m = RE_MEM.match(line)
                         if m:
                             memory_match = m
-                    memupdates = []
+                    #memupdates = []
                 elif state == 'evicted':
                     m = RE_MEM.match(line)
                     if m:
                         memory_match = m
-                    memupdates = []
+                    #memupdates = []
                 elif state == 'Image size updated':
                     m = RE_MEMUPDATE.match(line)
                     if m:
                         memupdates.append(int(m.group(1)))
-                elif state in set(('submitted', 'started')):
+                        logger.debug('log line %d: append %s to memupdates', lineno, m.group(1))
+                elif state in set(('submitted')):
+                    # NOTE: if state == 'started', it could just mean a restart
+                    # after being held and released. If restarted, do not reset memupdates
                     memory_match = None
                     memupdates = []
+                    logger.debug('log line %d: reset memupdates', lineno)
             except BaseException as err:
                 err.args += ("At line %d '%s'" % (lineno, line.rstrip()),)
                 raise
@@ -101,8 +106,14 @@ def termination_code(logfile):
         return_type = None
         return_value = None
     try:
+        # If there is a memory_match from the job termination, this works:
         memories = tuple(int(x) for x in memory_match.groups())
+        max_mem = max(memupdates)
+        if max_mem > memories[0]*1024:
+            logger.warning('Max Image size %d > final memory record: %d MB', max_mem, memories[0])
+            memories = (max_mem,) + memories[1:]
     except AttributeError:
+        # Because memory_match is None
         if state in ('terminated', 'evicted'):
             if return_value == 0:
                 logger.warning('Could not match the memory amounts: %s', logfile)
@@ -189,14 +200,18 @@ def check_logs(logfiles, show_all=False, terminated_only=False, memory=False,
         if msg:
             if sort:
                 try:
-                    parsed_date = dt.datetime.strptime(date, TIME_FORMAT)
+                    parsed_date = dt.datetime.strptime(date, TIME_FORMAT1)
                     outputs.append((parsed_date, msg))
                 except ValueError as err:
-                    err.args += ("On string %r" % date, "At %s" % logfile)
-                    if ignore_errors:
-                        logger.exception('Date parsing error')
-                    else:
-                        raise
+                    try:
+                        parsed_date = dt.datetime.strptime(date, TIME_FORMAT)
+                        outputs.append((parsed_date, msg))
+                    except ValueError as err:
+                        err.args += ("or %r" % TIME_FORMAT1, "on string %r" % date, "At %s" % logfile)
+                        if ignore_errors:
+                            logger.exception('Date parsing error')
+                        else:
+                            raise
             else:
                 print(msg)
     
